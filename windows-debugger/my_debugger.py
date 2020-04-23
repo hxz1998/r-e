@@ -12,6 +12,7 @@ class debugger():
         self.context = None
         self.exception = None
         self.exception_address = 0
+        self.breakpoints = {}
 
     def load(self, path_to_exec):
         """参数 dwCreationFlags 中的标志位控制着进程的创建方式
@@ -68,6 +69,14 @@ class debugger():
         else:
             print("[*] 附加进程失败惹！")
 
+    def detach(self):
+        if kernel32.DebugActiveProcessStop(self.pid):
+            print("[*] 终止调试，正在退出...")
+            return True
+        else:
+            print("这里有一些问题粗乃惹！")
+            return False
+
     def run(self):
         # 静静等待发生在 debugger 进程中的调试事件
         while self.debugger_active == True:
@@ -108,14 +117,6 @@ class debugger():
         print("[*] 异常地址：0x%08x" % self.exception_address)
         return DBG_CONTINUE
 
-    def detach(self):
-        if kernel32.DebugActiveProcessStop(self.pid):
-            print("[*] 终止调试，正在退出...")
-            return True
-        else:
-            print("这里有一些问题粗乃惹！")
-            return False
-
     def open_thread(self, thread_id):
         h_thread = kernel32.OpenThread(THREAD_ALL_ACCESS, None, thread_id)
         if h_thread is not None:
@@ -153,3 +154,46 @@ class debugger():
             return context
         else:
             return False
+
+    def read_process_memory(self, address, length):
+        data = ""
+        read_buf = create_string_buffer(length)
+        count = c_long(0)
+
+        if not kernel32.ReadProcessMemory(self.h_process, address, read_buf, length, byref(count)):
+            return False
+        else:
+            data += read_buf.raw
+            return data
+
+    def write_process_memory(self, address, data):
+        count = c_long(0)
+        length = len(data)
+        c_data = c_char_p(data[count.value:].encode("utf-8"))
+
+        if not kernel32.WriteProcessMemory(self.h_process, address, c_data, length, byref(count)):
+            return False
+        else:
+            return True
+
+    def bp_set(self, address):
+        if not address in self.breakpoints:
+            try:
+                # 备份这个内存上原有的字节值
+                original_byte = self.read_process_memory(address, 1)
+                # 写入一个INT3中断指令，其操作码为 0xCC
+                self.write_process_memory(address, "\xCC")
+                # 将设下的断点记录在一个内部的断点列表中
+                self.breakpoints[address] = (address, original_byte)
+            except Exception as e:
+                print("[*] 创建断点失败惹！，错误信息为：%s" % e)
+                return False
+        return True
+
+    def func_resolve(self, dll, function):
+        handle = kernel32.GetModuleHandleA(dll)
+        address = kernel32.GetProcAddress(handle, function)
+        kernel32.CloseHandle(handle)
+        return address
+
+

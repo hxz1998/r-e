@@ -7,6 +7,11 @@ debugger = my_debugger.debugger()
 pid = input("输入进程号\n> ")
 debugger.attach(int(pid))
 
+printf_address = debugger.func_resolve("msvcrt.dll", "printf")
+print("[*] 地址在：0x%08x" % printf_address)
+debugger.bp_set(printf_address)
+debugger.run()
+
 # list = debugger.enumerate_threads()
 #
 # if list is not False:
@@ -23,7 +28,5 @@ debugger.attach(int(pid))
 #         print("[*] ECX: 0x%08x" % thread_context.Ecx)
 #         print("[*] EDX: 0x%08x" % thread_context.Edx)
 #         print("[*] 结素惹~")
-
-debugger.run()
 
 debugger.detach()
